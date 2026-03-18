@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "build": "npm install && npx prisma generate"
+    "build": "npm install && node node_modules/prisma/bin.js generate"
   },
   "keywords": [],
   "author": "",
