@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "postinstall": "node node_modules/prisma/build/index.js generate",
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "build": "npm install && node node_modules/prisma/bin.js generate"
+    "build": "npm install"
   },
   "keywords": [],
   "author": "",
