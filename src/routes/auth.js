@@ -5,7 +5,12 @@ const jwt = require('jsonwebtoken');
 
 // POST /api/auth/register - Seed/Register users
 router.post('/register', async (req, res) => {
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Missing required fields: email and password are required' });
+  }
+
   const prisma = req.prisma;
 
   try {
@@ -36,7 +41,13 @@ router.post('/register', async (req, res) => {
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  console.log(req.body);
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Missing email or password' });
+  }
+
   const prisma = req.prisma;
 
   try {

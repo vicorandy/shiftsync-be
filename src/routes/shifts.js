@@ -10,23 +10,67 @@ router.get('/', authenticate, async (req, res) => {
   const prisma = req.prisma;
 
   try {
+    const where = {
+      startTime: { lt: new Date(end) },
+      endTime: { gt: new Date(start) }
+    };
+    
+    if (locationId) {
+      where.locationId = locationId;
+    }
+
     const shifts = await prisma.shift.findMany({
-      where: {
-        locationId,
-        startTime: { gte: new Date(start) },
-        endTime: { lte: new Date(end) }
-      },
+      where,
       include: {
         assignments: { include: { staffProfile: { include: { user: { select: { name: true } } } } } },
         skill: true,
         location: true
       }
     });
+    console.log(`[Backend] GET /api/shifts`, { count: shifts.length, locationId, start, end });
     res.json(shifts);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch shifts' });
   }
 });
+
+// GET /api/shifts/me - Get upcoming shifts for the current staff member
+router.get('/me', authenticate, authorize(['STAFF']), async (req, res) => {
+  const prisma = req.prisma;
+  try {
+    const staffProfile = await prisma.staffProfile.findUnique({
+      where: { userId: req.user.userId }
+    });
+
+    if (!staffProfile) return res.status(404).json({ error: 'Staff profile not found' });
+
+    const now = new Date();
+    const shifts = await prisma.shift.findMany({
+      where: {
+        assignments: {
+          some: {
+            staffProfileId: staffProfile.id
+          }
+        },
+        startTime: { gte: now }
+      },
+      include: {
+        assignments: { include: { staffProfile: { include: { user: { select: { name: true } } } } } },
+        skill: true,
+        location: true
+      },
+      orderBy: { startTime: 'asc' }
+    });
+    console.log(`[Backend] GET /api/shifts/me for user ${req.user.userId}`, { 
+      count: shifts.length,
+      shifts: shifts.map(s => ({ id: s.id, start: s.startTime }))
+    });
+    res.json(shifts);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch your shifts' });
+  }
+});
+
 
 // POST /api/shifts - Create a shift (Manager/Admin)
 router.post('/', authenticate, authorize(['ADMIN', 'MANAGER']), async (req, res) => {

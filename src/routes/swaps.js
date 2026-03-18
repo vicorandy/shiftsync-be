@@ -3,6 +3,59 @@ const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const SchedulingService = require('../services/schedulingService');
 
+// GET /api/swaps - List all swap/drop requests (ADMIN/MANAGER only)
+router.get('/', authenticate, authorize(['ADMIN', 'MANAGER']), async (req, res) => {
+  const prisma = req.prisma;
+  try {
+    const requests = await prisma.swapRequest.findMany({
+      include: {
+        shift: { include: { location: true, skill: true } },
+        requester: { include: { user: true } },
+        accepter: { include: { user: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    console.log(`[Backend] GET /api/swaps`, { count: requests.length });
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch swap requests' });
+  }
+});
+
+// GET /api/swaps/me - Get swap requests for the current staff member
+router.get('/me', authenticate, authorize(['STAFF']), async (req, res) => {
+  const prisma = req.prisma;
+  try {
+    const staffProfile = await prisma.staffProfile.findUnique({
+      where: { userId: req.user.userId }
+    });
+
+    if (!staffProfile) return res.status(404).json({ error: 'Staff profile not found' });
+
+    const requests = await prisma.swapRequest.findMany({
+      where: {
+        OR: [
+          { requesterId: staffProfile.id },
+          { accepterId: staffProfile.id }
+        ]
+      },
+      include: {
+        shift: { include: { location: true, skill: true } },
+        requester: { include: { user: { select: { name: true, email: true } } } },
+        accepter: { include: { user: { select: { name: true, email: true } } } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    console.log(`[Backend] GET /api/swaps/me for user ${req.user.userId}`, { 
+      count: requests.length,
+      requests: requests.map(r => ({ id: r.id, status: r.status, type: r.type }))
+    });
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch your swap requests' });
+  }
+});
+
 // POST /api/swaps/request - Create a swap or drop request
 router.post('/request', authenticate, authorize(['STAFF']), async (req, res) => {
   const { shiftId, type, accepterProfileId } = req.body; // type: SWAP or DROP
@@ -132,6 +185,28 @@ router.post('/:id/approve', authenticate, authorize(['ADMIN', 'MANAGER']), async
     res.json({ message: `Request ${action === 'APPROVE' ? 'approved' : 'rejected'}` });
   } catch (error) {
     res.status(400).json({ error: 'Action failed', details: error.message });
+  }
+});
+
+// DELETE /api/swaps/:id - Cancel a request (Requester only)
+router.delete('/:id', authenticate, authorize(['STAFF']), async (req, res) => {
+  const requestId = req.params.id;
+  const prisma = req.prisma;
+
+  try {
+    const staffProfile = await prisma.staffProfile.findUnique({ where: { userId: req.user.userId } });
+    const request = await prisma.swapRequest.findUnique({ where: { id: requestId } });
+
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.requesterId !== staffProfile.id) return res.status(403).json({ error: 'You can only cancel your own requests' });
+    if (request.status === 'APPROVED' || request.status === 'REJECTED') {
+      return res.status(400).json({ error: 'Cannot cancel a request that has already been processed' });
+    }
+
+    await prisma.swapRequest.delete({ where: { id: requestId } });
+    res.json({ message: 'Request cancelled successfully' });
+  } catch (error) {
+    res.status(400).json({ error: 'Cancellation failed', details: error.message });
   }
 });
 

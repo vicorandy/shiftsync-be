@@ -2,6 +2,30 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 
+// GET /api/staff - List all staff profiles (ADMIN/MANAGER/STAFF)
+router.get('/', authenticate, authorize(['ADMIN', 'MANAGER', 'STAFF']), async (req, res) => {
+  const prisma = req.prisma;
+  try {
+    const staff = await prisma.staffProfile.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        skills: true,
+        locations: true
+      }
+    });
+    res.json(staff);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch staff list' });
+  }
+});
+
 // GET /api/staff/me - Get current staff profile
 router.get('/me', authenticate, async (req, res) => {
   const prisma = req.prisma;
