@@ -23,15 +23,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // Socket.io connection
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-
   socket.on('join_location', (locationId) => {
     socket.join(`location_${locationId}`);
-    console.log(`User ${socket.id} joined location_${locationId}`);
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    // User disconnected
   });
 });
 
